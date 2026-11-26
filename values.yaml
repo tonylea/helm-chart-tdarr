@@ -2,7 +2,7 @@ image:
   # Empty uses the chart's appVersion.
   tag: ""
 
-# The user and group Tdarr runs as; the database and server volumes are given to the group.
+# The user and group Tdarr runs as, after the image's startup takes ownership of its folders.
 user: 1000
 group: 1000
 

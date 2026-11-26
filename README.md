@@ -77,9 +77,8 @@ The chart sets these, and Tdarr's environment variables override its JSON config
 
 ## User and group
 
-Tdarr runs as `user` and `group`, never as root, with all capabilities dropped and no privilege escalation.
-The image's `PUID` and `PGID` aren't used, and nothing is chowned.
-The database and server volumes are given to the group.
+The container starts as the image's default user, root, because the database volume mounts inside the server volume and kubelet creates the folders between them owned by root.
+The image's startup takes ownership of its folders, then runs Tdarr as `user` and `group`, passed as `PUID` and `PGID`.
 
 ## Requirements
 

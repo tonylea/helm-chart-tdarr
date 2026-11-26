@@ -24,34 +24,38 @@ tests:
           path: spec.template.spec.containers[0].image
           value: ghcr.io/haveagitgat/tdarr:3.9.00
 
-  - it: runs as user and group 1000 without privileges
+  - it: starts as the image's default user and hands Tdarr user and group 1000
     asserts:
-      - equal:
+      - notExists:
           path: spec.template.spec.securityContext
-          value:
-            runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
-            fsGroup: 1000
-      - equal:
+      - notExists:
           path: spec.template.spec.containers[0].securityContext
-          value:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: [ALL]
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PUID
+            value: "1000"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PGID
+            value: "1000"
 
-  - it: runs as another user and group when set
+  - it: hands Tdarr another user and group when set
     set:
       user: 1026
       group: 100
     asserts:
-      - equal:
-          path: spec.template.spec.securityContext
-          value:
-            runAsNonRoot: true
-            runAsUser: 1026
-            runAsGroup: 100
-            fsGroup: 100
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PUID
+            value: "1026"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PGID
+            value: "100"
 
   - it: declares the web UI and server ports
     asserts:
@@ -78,6 +82,10 @@ tests:
               value: "false"
             - name: TZ
               value: UTC
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
             - name: auth
               value: "true"
             - name: internalNode
@@ -162,6 +170,10 @@ tests:
               value: "false"
             - name: TZ
               value: UTC
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
             - name: auth
               value: "true"
             - name: seededApiKey
