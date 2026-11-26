@@ -1,0 +1,42 @@
+suite: HTTPRoute
+release:
+  name: tdarr
+templates:
+  - templates/httproute.yaml
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: routes the hostnames to the Service when enabled
+    set:
+      httpRoute:
+        enabled: true
+        parentRefs:
+          - name: gateway
+            sectionName: websecure
+        hostnames:
+          - tdarr.example.com
+    asserts:
+      - equal:
+          path: spec.parentRefs
+          value:
+            - name: gateway
+              sectionName: websecure
+      - equal:
+          path: spec.hostnames
+          value:
+            - tdarr.example.com
+      - equal:
+          path: spec.rules[0].backendRefs
+          value:
+            - name: tdarr
+              port: 8265
+
+  - it: fails when enabled without parentRefs
+    set:
+      httpRoute.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: httpRoute.parentRefs is required when httpRoute is enabled

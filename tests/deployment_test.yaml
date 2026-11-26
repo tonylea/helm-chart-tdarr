@@ -1,0 +1,413 @@
+suite: Deployment
+release:
+  name: tdarr
+templates:
+  - templates/deployment.yaml
+tests:
+  - it: runs one replica of the chart's appVersion, stopping the old pod first
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/haveagitgat/tdarr:3.10.00
+
+  - it: uses the image tag when one is set
+    set:
+      image.tag: 3.9.00
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/haveagitgat/tdarr:3.9.00
+
+  - it: runs as user and group 1000 without privileges
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+
+  - it: runs as another user and group when set
+    set:
+      user: 1026
+      group: 100
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 1026
+            runAsGroup: 100
+            fsGroup: 100
+
+  - it: declares the web UI and server ports
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports
+          value:
+            - name: web
+              containerPort: 8265
+            - name: server
+              containerPort: 8266
+
+  - it: sets the server's environment with auth on and no internal node by default
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - name: serverIP
+              value: 0.0.0.0
+            - name: serverPort
+              value: "8266"
+            - name: webUIPort
+              value: "8265"
+            - name: openBrowser
+              value: "false"
+            - name: TZ
+              value: UTC
+            - name: auth
+              value: "true"
+            - name: internalNode
+              value: "false"
+
+  - it: sets the timezone and turns auth off when asked
+    set:
+      timezone: Europe/London
+      auth: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TZ
+            value: Europe/London
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: auth
+            value: "false"
+
+  - it: passes the job reports path only when set
+    set:
+      jobReportsPath: /app/reports
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: jobReportsPath
+            value: /app/reports
+
+  - it: seeds the API key from the Secret on the server
+    set:
+      apiKey.secretKeyRef.name: tdarr-api-key
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: seededApiKey
+            valueFrom:
+              secretKeyRef:
+                name: tdarr-api-key
+                key: api-key
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: apiKey
+            valueFrom:
+              secretKeyRef:
+                name: tdarr-api-key
+                key: api-key
+
+  - it: uses the Secret's key when one is set
+    set:
+      apiKey.secretKeyRef.name: tdarr-api-key
+      apiKey.secretKeyRef.key: key
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: seededApiKey
+            valueFrom:
+              secretKeyRef:
+                name: tdarr-api-key
+                key: key
+
+  - it: runs the internal node with its name, the API key and the worker counts
+    set:
+      internalNode.enabled: true
+      apiKey.secretKeyRef.name: tdarr-api-key
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env
+          value:
+            - name: serverIP
+              value: 0.0.0.0
+            - name: serverPort
+              value: "8266"
+            - name: webUIPort
+              value: "8265"
+            - name: openBrowser
+              value: "false"
+            - name: TZ
+              value: UTC
+            - name: auth
+              value: "true"
+            - name: seededApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: tdarr-api-key
+                  key: api-key
+            - name: internalNode
+              value: "true"
+            - name: nodeName
+              value: internal
+            - name: apiKey
+              valueFrom:
+                secretKeyRef:
+                  name: tdarr-api-key
+                  key: api-key
+            - name: transcodecpuWorkers
+              value: "2"
+            - name: healthcheckcpuWorkers
+              value: "1"
+            - name: transcodegpuWorkers
+              value: "0"
+            - name: healthcheckgpuWorkers
+              value: "0"
+
+  - it: uses the internal node's name and worker counts when set
+    set:
+      internalNode:
+        enabled: true
+        name: main
+        workers:
+          transcodeCpu: 4
+          healthcheckCpu: 2
+          transcodeGpu: 1
+          healthcheckGpu: 1
+      auth: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: nodeName
+            value: main
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: transcodecpuWorkers
+            value: "4"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: healthcheckcpuWorkers
+            value: "2"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: transcodegpuWorkers
+            value: "1"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: healthcheckgpuWorkers
+            value: "1"
+
+  - it: runs the internal node without an API key when auth is off
+    set:
+      internalNode.enabled: true
+      auth: false
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers[0].env
+          count: 12
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: internalNode
+            value: "true"
+
+  - it: fails when the internal node and auth are on without a Secret
+    set:
+      internalNode.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: apiKey.secretKeyRef.name is required when internalNode is enabled and auth is on
+
+  - it: probes the web UI port with TCP checks
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe
+          value:
+            tcpSocket:
+              port: web
+            periodSeconds: 30
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            tcpSocket:
+              port: web
+
+  - it: leaves resources to whoever deploys it
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources
+          value: {}
+
+  - it: uses the resources when set
+    set:
+      resources.requests.cpu: 50m
+      resources.requests.memory: 128Mi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources
+          value:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+
+  - it: mounts the server volume with the database volume inside it, and the cache, configs and logs
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts
+          value:
+            - name: server
+              mountPath: /app/server
+            - name: database
+              mountPath: /app/server/Tdarr/DB2
+            - name: cache
+              mountPath: /temp
+            - name: configs
+              mountPath: /app/configs
+            - name: logs
+              mountPath: /app/logs
+      - equal:
+          path: spec.template.spec.volumes
+          value:
+            - name: server
+              persistentVolumeClaim:
+                claimName: tdarr-server
+            - name: database
+              persistentVolumeClaim:
+                claimName: tdarr-database
+            - name: cache
+              emptyDir: {}
+            - name: configs
+              emptyDir: {}
+            - name: logs
+              emptyDir: {}
+
+  - it: uses existing claims for the server, database and cache
+    set:
+      persistence.server.existingClaim: my-server
+      persistence.database.existingClaim: my-database
+      persistence.cache.existingClaim: my-cache
+    asserts:
+      - equal:
+          path: spec.template.spec.volumes
+          value:
+            - name: server
+              persistentVolumeClaim:
+                claimName: my-server
+            - name: database
+              persistentVolumeClaim:
+                claimName: my-database
+            - name: cache
+              persistentVolumeClaim:
+                claimName: my-cache
+            - name: configs
+              emptyDir: {}
+            - name: logs
+              emptyDir: {}
+
+  - it: mounts each media claim at its path
+    set:
+      persistence.media:
+        - name: movies
+          existingClaim: movies-claim
+          mountPath: /media/movies
+        - name: shows
+          existingClaim: shows-claim
+          mountPath: /media/shows
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: media-movies
+            mountPath: /media/movies
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: media-shows
+            mountPath: /media/shows
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: media-movies
+            persistentVolumeClaim:
+              claimName: movies-claim
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: media-shows
+            persistentVolumeClaim:
+              claimName: shows-claim
+
+  - it: fails when a media mount has no name
+    set:
+      persistence.media:
+        - existingClaim: movies-claim
+          mountPath: /media/movies
+    asserts:
+      - failedTemplate:
+          errorMessage: each persistence.media mount needs a name
+
+  - it: fails when a media mount has no existing claim
+    set:
+      persistence.media:
+        - name: movies
+          mountPath: /media/movies
+    asserts:
+      - failedTemplate:
+          errorMessage: persistence.media mount movies needs an existingClaim
+
+  - it: fails when a media mount has no path
+    set:
+      persistence.media:
+        - name: movies
+          existingClaim: movies-claim
+    asserts:
+      - failedTemplate:
+          errorMessage: persistence.media mount movies needs a mountPath
+
+  - it: sets affinity when given
+    set:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: example.com/zone
+                    operator: In
+                    values: ["a"]
+    asserts:
+      - equal:
+          path: spec.template.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key
+          value: example.com/zone
+
+  - it: sets no affinity by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.affinity

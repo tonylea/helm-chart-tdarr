@@ -1,0 +1,148 @@
+{{- $apiKey := .Values.apiKey.secretKeyRef }}
+{{- if and .Values.internalNode.enabled .Values.auth (not $apiKey.name) }}
+{{- fail "apiKey.secretKeyRef.name is required when internalNode is enabled and auth is on" }}
+{{- end }}
+{{- range .Values.persistence.media }}
+{{- if not .name }}
+{{- fail "each persistence.media mount needs a name" }}
+{{- end }}
+{{- if not .existingClaim }}
+{{- fail (printf "persistence.media mount %s needs an existingClaim" .name) }}
+{{- end }}
+{{- if not .mountPath }}
+{{- fail (printf "persistence.media mount %s needs a mountPath" .name) }}
+{{- end }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "tdarr.labels" . | nindent 4 }}
+spec:
+  # The database is SQLite, which takes one writer, so the old pod stops before the new one starts.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "tdarr.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tdarr.podLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.user }}
+        runAsGroup: {{ .Values.group }}
+        fsGroup: {{ .Values.group }}
+      containers:
+        - name: tdarr
+          image: "ghcr.io/haveagitgat/tdarr:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: serverIP
+              value: 0.0.0.0
+            - name: serverPort
+              value: "8266"
+            - name: webUIPort
+              value: "8265"
+            - name: openBrowser
+              value: "false"
+            - name: TZ
+              value: {{ .Values.timezone | quote }}
+            - name: auth
+              value: {{ .Values.auth | quote }}
+            {{- with .Values.jobReportsPath }}
+            - name: jobReportsPath
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $apiKey.name }}
+            - name: seededApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ required "apiKey.secretKeyRef.key is required" $apiKey.key }}
+            {{- end }}
+            - name: internalNode
+              value: {{ .Values.internalNode.enabled | quote }}
+            {{- if .Values.internalNode.enabled }}
+            - name: nodeName
+              value: {{ .Values.internalNode.name | quote }}
+            {{- with $apiKey.name }}
+            - name: apiKey
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ required "apiKey.secretKeyRef.key is required" $apiKey.key }}
+            {{- end }}
+            - name: transcodecpuWorkers
+              value: {{ .Values.internalNode.workers.transcodeCpu | quote }}
+            - name: healthcheckcpuWorkers
+              value: {{ .Values.internalNode.workers.healthcheckCpu | quote }}
+            - name: transcodegpuWorkers
+              value: {{ .Values.internalNode.workers.transcodeGpu | quote }}
+            - name: healthcheckgpuWorkers
+              value: {{ .Values.internalNode.workers.healthcheckGpu | quote }}
+            {{- end }}
+          ports:
+            - name: web
+              containerPort: 8265
+            - name: server
+              containerPort: 8266
+          livenessProbe:
+            tcpSocket:
+              port: web
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: web
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: server
+              mountPath: /app/server
+            - name: database
+              mountPath: /app/server/Tdarr/DB2
+            - name: cache
+              mountPath: /temp
+            - name: configs
+              mountPath: /app/configs
+            - name: logs
+              mountPath: /app/logs
+            {{- range .Values.persistence.media }}
+            - name: media-{{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: server
+          persistentVolumeClaim:
+            claimName: {{ include "tdarr.claimName" (list . .Values.persistence.server "server") }}
+        - name: database
+          persistentVolumeClaim:
+            claimName: {{ include "tdarr.claimName" (list . .Values.persistence.database "database") }}
+        - name: cache
+          {{- with .Values.persistence.cache.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: configs
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        {{- range .Values.persistence.media }}
+        - name: media-{{ .name }}
+          persistentVolumeClaim:
+            claimName: {{ .existingClaim }}
+        {{- end }}
