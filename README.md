@@ -77,7 +77,7 @@ The chart sets these, and Tdarr's environment variables override its JSON config
 
 ## User and group
 
-The container starts as the image's default user, root, because the database volume mounts inside the server volume and kubelet creates the folders between them owned by root.
+The container starts as the image's default user, root, because the database volume mounts inside the server volume and Kubernetes creates the folders between them owned by root.
 The image's startup takes ownership of its folders, then runs Tdarr as `user` and `group`, passed as `PUID` and `PGID`.
 
 ## Requirements
