@@ -1,6 +1,6 @@
 {
   "name": "helm-chart-tdarr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Deploys the Tdarr server, which transcodes and health-checks a media library",
   "private": true,
   "repository": {
