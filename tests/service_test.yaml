@@ -1,0 +1,21 @@
+suite: Service
+release:
+  name: tdarr
+templates:
+  - templates/service.yaml
+tests:
+  - it: serves only the web UI port
+    asserts:
+      - equal:
+          path: spec.ports
+          value:
+            - name: http
+              port: 8265
+              targetPort: web
+      - equal:
+          path: spec.selector
+          value:
+            app.kubernetes.io/name: tdarr
+            app.kubernetes.io/instance: tdarr
+      - notExists:
+          path: spec.type

@@ -12,6 +12,21 @@
     "package-lock.json"
   ],
   "words": [
-    "kubeconform"
+    "chowned",
+    "haveagitgat",
+    "healthcheck",
+    "healthcheckcpu",
+    "healthcheckgpu",
+    "httproute",
+    "kubeconform",
+    "nindent",
+    "PGID",
+    "PUID",
+    "tapi",
+    "tdarr",
+    "timezone",
+    "transcodecpu",
+    "transcodegpu",
+    "websecure"
   ]
 }

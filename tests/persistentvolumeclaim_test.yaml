@@ -1,0 +1,90 @@
+suite: PersistentVolumeClaim
+release:
+  name: tdarr
+templates:
+  - templates/persistentvolumeclaim.yaml
+tests:
+  - it: creates ReadWriteOnce claims for the database and server from the default class
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.name
+          value: tdarr-database
+        documentIndex: 0
+      - equal:
+          path: spec
+          value:
+            accessModes: [ReadWriteOnce]
+            resources:
+              requests:
+                storage: 1Gi
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: tdarr-server
+        documentIndex: 1
+      - equal:
+          path: spec
+          value:
+            accessModes: [ReadWriteOnce]
+            resources:
+              requests:
+                storage: 2Gi
+        documentIndex: 1
+
+  - it: uses the size and storage class when set
+    set:
+      persistence.database.size: 5Gi
+      persistence.database.storageClassName: fast
+      persistence.server.size: 10Gi
+      persistence.server.storageClassName: slow
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: 5Gi
+        documentIndex: 0
+      - equal:
+          path: spec.storageClassName
+          value: fast
+        documentIndex: 0
+      - equal:
+          path: spec.resources.requests.storage
+          value: 10Gi
+        documentIndex: 1
+      - equal:
+          path: spec.storageClassName
+          value: slow
+        documentIndex: 1
+
+  - it: creates no claim for an existing one
+    set:
+      persistence.database.existingClaim: my-database
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: tdarr-server
+
+  - it: creates no claims when both exist
+    set:
+      persistence.database.existingClaim: my-database
+      persistence.server.existingClaim: my-server
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: fails when the database has neither an existing claim nor a size
+    set:
+      persistence.database.size: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: persistence.database needs an existingClaim or a size
+
+  - it: fails when the server volume has neither an existing claim nor a size
+    set:
+      persistence.server.size: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: persistence.server needs an existingClaim or a size

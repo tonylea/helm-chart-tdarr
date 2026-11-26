@@ -1,0 +1,65 @@
+image:
+  # Empty uses the chart's appVersion.
+  tag: ""
+
+# The user and group Tdarr runs as, after the image's startup takes ownership of its folders.
+user: 1000
+group: 1000
+
+timezone: UTC
+
+# Tdarr's own default is on.
+auth: true
+
+# An existing Secret holding the API key, which must start with tapi_ and be at least 14 characters.
+# It is passed as seededApiKey, which also creates an admin user with the key as its password
+# when no users exist, and as the internal node's apiKey.
+apiKey:
+  secretKeyRef:
+    name: ""
+    key: api-key
+
+# Empty keeps job reports in Tdarr/DB2/JobReports.
+jobReportsPath: ""
+
+# A node that runs inside the server's pod.
+# Nothing gives the pod a GPU, so the GPU worker counts stay 0.
+internalNode:
+  enabled: false
+  name: internal
+  workers:
+    transcodeCpu: 2
+    healthcheckCpu: 1
+    transcodeGpu: 0
+    healthcheckGpu: 0
+
+resources: {}
+
+# An empty storageClassName uses the cluster's default class.
+persistence:
+  # Tdarr/DB2: the SQLite database and Tdarr's other live state.
+  database:
+    existingClaim: ""
+    storageClassName: ""
+    size: 1Gi
+  # /app/server: backups, plugins and samples. The database volume mounts inside it.
+  server:
+    existingClaim: ""
+    storageClassName: ""
+    size: 2Gi
+  # /temp, the transcode cache. An emptyDir when no claim is given.
+  cache:
+    existingClaim: ""
+  # Libraries and any other path the server and its nodes must both see, each an existing claim.
+  media: []
+  # - name: movies
+  #   existingClaim: movies
+  #   mountPath: /media/movies
+
+affinity: {}
+
+# A Gateway API HTTPRoute to the web UI.
+httpRoute:
+  enabled: false
+  parentRefs: []
+  hostnames: []

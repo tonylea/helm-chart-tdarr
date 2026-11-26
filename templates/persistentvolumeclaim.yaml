@@ -1,0 +1,21 @@
+{{- $claims := list (dict "suffix" "database" "volume" .Values.persistence.database) (dict "suffix" "server" "volume" .Values.persistence.server) }}
+{{- range $claims }}
+{{- if not .volume.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $.Release.Name }}-{{ .suffix }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "tdarr.labels" $ | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .volume.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ required (printf "persistence.%s needs an existingClaim or a size" .suffix) .volume.size }}
+{{- end }}
+{{- end }}

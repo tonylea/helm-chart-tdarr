@@ -1,0 +1,9 @@
+apiVersion: v2
+name: tdarr
+description: Deploys the Tdarr server, which transcodes and health-checks a media library
+type: application
+version: 0.0.0
+appVersion: "3.10.00"
+home: https://github.com/tonylea/helm-chart-tdarr
+sources:
+  - https://github.com/HaveAGitGat/Tdarr
